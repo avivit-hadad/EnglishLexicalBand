@@ -1,0 +1,32 @@
+{
+  "name": "lexical-band",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/phone-url.mjs && vite --host 0.0.0.0 --port 5173",
+    "dev:phone": "node scripts/phone-url.mjs && vite --host 0.0.0.0 --port 5173",
+    "build": "npm run import-words && tsc -b && vite build",
+    "preview": "node scripts/phone-url.mjs 4173 && vite preview --host 0.0.0.0 --port 4173",
+    "preview:phone": "npm run build && npm run preview",
+    "import-words": "node scripts/import-excel.mjs",
+    "test:supabase": "node scripts/test-supabase-auth.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "i18next": "^24.2.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-i18next": "^15.4.1",
+    "react-router-dom": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.7.2",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.20.5",
+    "xlsx": "^0.18.5"
+  }
+}

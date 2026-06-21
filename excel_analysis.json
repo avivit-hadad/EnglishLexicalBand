@@ -1,0 +1,242 @@
+{
+  "All list": {
+    "total_rows": 1403,
+    "header": [
+      "Entry",
+      "PoS",
+      "translate",
+      "Meaning",
+      "Rec/Prod",
+      "Band 1 Code level",
+      null
+    ],
+    "entry_count": 1402,
+    "sample": [
+      [
+        "a few",
+        "det, pron",
+        "כמה",
+        "",
+        "Prod",
+        "Pre-Band I",
+        null
+      ],
+      [
+        "a/an",
+        "",
+        "א/א",
+        "",
+        "Prod",
+        "Pre-Band I",
+        null
+      ],
+      [
+        "add",
+        "v",
+        "הוסף",
+        "total",
+        "Prod",
+        "Pre-Band I",
+        null
+      ],
+      [
+        "all the time",
+        "",
+        "כל הזמן",
+        "",
+        "Prod",
+        "Pre-Band I",
+        null
+      ],
+      [
+        "and",
+        "conj",
+        "ו",
+        "in addition",
+        "Prod",
+        "Pre-Band I",
+        null
+      ]
+    ],
+    "with_translate": 1402,
+    "with_meaning": 541,
+    "rec_prod": {
+      "Prod": 923,
+      "Rec": 469,
+      "": 10
+    },
+    "bands": {
+      "Pre-Band I": 198,
+      "Band I Core I": 602,
+      "Band I Core II": 602
+    }
+  },
+  "Pre-Band I": {
+    "total_rows": 204,
+    "header": [
+      "Entry",
+      "PoS",
+      null,
+      "Meaning",
+      "Rec/Prod"
+    ],
+    "entry_count": 198,
+    "sample": [
+      [
+        "a few",
+        "det, pron",
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "a/an",
+        null,
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "add",
+        "v",
+        null,
+        "total",
+        "Prod"
+      ],
+      [
+        "all the time",
+        null,
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "and",
+        "conj",
+        null,
+        "in addition",
+        "Prod"
+      ]
+    ]
+  },
+  "Band I Core I": {
+    "total_rows": 555,
+    "header": [
+      "Entry",
+      "PoS",
+      null,
+      "Family member(s)",
+      "PoS",
+      "Meaning",
+      "Rec/Prod"
+    ],
+    "entry_count": 549,
+    "sample": [
+      [
+        "a lot/lots",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "a quarter to/a quarter past ",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Rec"
+      ],
+      [
+        "a/an",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "about",
+        "prep",
+        null,
+        null,
+        null,
+        "connected with, related to ",
+        "Prod"
+      ],
+      [
+        "above",
+        "prep, adv",
+        null,
+        null,
+        null,
+        null,
+        "Prod"
+      ]
+    ]
+  },
+  "Band I Core II": {
+    "total_rows": 608,
+    "header": [
+      "Entry",
+      "PoS",
+      null,
+      "Family member(s)",
+      "PoS",
+      "Meaning",
+      "Rec/Prod"
+    ],
+    "entry_count": 602,
+    "sample": [
+      [
+        "a bit",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Rec"
+      ],
+      [
+        "a while ",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "a.m.",
+        null,
+        null,
+        null,
+        null,
+        null,
+        "Prod"
+      ],
+      [
+        "about",
+        "prep ",
+        null,
+        null,
+        null,
+        "approximately ",
+        "Prod"
+      ],
+      [
+        "account",
+        "n",
+        null,
+        null,
+        null,
+        "financial records",
+        "Prod"
+      ]
+    ]
+  }
+}
