@@ -9,7 +9,7 @@ import {
   loadUserDataFromCloud,
   type AuthUser,
 } from '../lib/auth';
-import { createDefaultUserData, loadUserData, setActiveVocabulary as setVocabulary } from '../lib/progress';
+import { createDefaultUserData, loadUserData, setActiveVocabulary as setVocabulary, ensureWeekPlan } from '../lib/progress';
 import { initUiLanguage, setUiLanguage } from '../i18n';
 
 interface AppContextValue {
@@ -44,6 +44,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         reminderTime: '20:00',
         reminderEnabled: false,
         sessionMinutes: 10,
+        wordsPerDay: 10,
         onboarded: false,
         activeVocabulary: 'elementary',
       });
@@ -55,6 +56,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!data.profile.activeVocabulary) {
       data.profile.activeVocabulary = 'elementary';
     }
+    if (!data.profile.wordsPerDay) {
+      data.profile.wordsPerDay = 10;
+    }
+    data = ensureWeekPlan(data, data.profile.activeVocabulary);
     initUiLanguage(data.profile.uiLanguage);
     setUserData(data);
   }, []);

@@ -4,58 +4,85 @@ import { shuffle, getDistractors } from './words';
 import {
   buildDailyWordQueue,
   buildMyListQueue,
+  buildReviewWordQueue,
+  buildExamWordQueue,
   getActiveVocabulary,
   getVocabState,
 } from './progress';
+import { getNextLessonDayIndex } from './weekPlan';
 
 export interface SessionPlan {
   rounds: { mode: GameMode; label: string; words: Word[] }[];
   sessionType: SessionType;
-  targetMinutes: number;
   vocabularyId: VocabularyId;
+  lessonDayIndex?: number;
 }
 
-export function buildSessionPlan(
-  sessionType: SessionType,
-  data: UserData,
-  targetMinutes: number
-): SessionPlan {
+export function buildSessionPlan(sessionType: SessionType, data: UserData): SessionPlan {
   const vocabularyId = getActiveVocabulary(data);
-  const state = getVocabState(data, vocabularyId);
 
   if (sessionType === 'mylist') {
     const words = buildMyListQueue(data, vocabularyId);
     return {
       sessionType,
-      targetMinutes,
       vocabularyId,
-      rounds: words.length > 0
-        ? [{ mode: 'flash' as GameMode, label: 'flashMatch', words }]
-        : [],
+      rounds:
+        words.length > 0
+          ? [{ mode: 'flash' as GameMode, label: 'flashMatch', words }]
+          : [],
     };
   }
 
-  const myListWords = state.myList.length > 0 ? buildMyListQueue(data, vocabularyId).slice(0, 5) : [];
-  const systemWords = buildDailyWordQueue(data, vocabularyId);
-
-  const rounds: SessionPlan['rounds'] = [];
-
-  if (myListWords.length > 0) {
-    rounds.push({ mode: 'flash' as GameMode, label: 'myListRound', words: myListWords });
+  if (sessionType === 'review') {
+    const words = buildReviewWordQueue(data, vocabularyId);
+    return {
+      sessionType,
+      vocabularyId,
+      rounds:
+        words.length > 0
+          ? [{ mode: 'flash' as GameMode, label: 'weekReview', words }]
+          : [],
+    };
   }
 
-  rounds.push({
-    mode: 'flash' as GameMode,
-    label: 'flashMatch',
-    words: systemWords.slice(0, 15),
-  });
+  if (sessionType === 'exam') {
+    const words = buildExamWordQueue(data, vocabularyId);
+    return {
+      sessionType,
+      vocabularyId,
+      rounds:
+        words.length > 0
+          ? [{ mode: 'flash' as GameMode, label: 'weekExam', words }]
+          : [],
+    };
+  }
+
+  const words = buildDailyWordQueue(data, vocabularyId);
+  const lessonDayIndex = getNextLessonDayIndex(getVocabState(data, vocabularyId).weekPlan);
 
   return {
-    sessionType,
-    targetMinutes,
+    sessionType: 'daily',
     vocabularyId,
-    rounds: rounds.filter((r) => r.words.length > 0),
+    lessonDayIndex: lessonDayIndex ?? undefined,
+    rounds:
+      words.length > 0
+        ? [{ mode: 'flash' as GameMode, label: 'flashMatch', words }]
+        : [],
   };
+}
+
+/** All unique words in a session plan, in play order */
+export function getSessionWords(plan: SessionPlan): Word[] {
+  const seen = new Set<number>();
+  const words: Word[] = [];
+  for (const round of plan.rounds) {
+    for (const word of round.words) {
+      if (seen.has(word.id)) continue;
+      seen.add(word.id);
+      words.push(word);
+    }
+  }
+  return words;
 }
 
 export function buildWordListPlan(wordIds: number[], vocabularyId: VocabularyId): SessionPlan {
@@ -65,11 +92,11 @@ export function buildWordListPlan(wordIds: number[], vocabularyId: VocabularyId)
 
   return {
     sessionType: 'mylist',
-    targetMinutes: 10,
     vocabularyId,
-    rounds: words.length > 0
-      ? [{ mode: 'flash' as GameMode, label: 'flashMatch', words }]
-      : [],
+    rounds:
+      words.length > 0
+        ? [{ mode: 'flash' as GameMode, label: 'flashMatch', words }]
+        : [],
   };
 }
 
@@ -111,9 +138,10 @@ export function checkLocalReminder(): void {
     const [h, m] = time.split(':').map(Number);
     if (now.getHours() > h || (now.getHours() === h && now.getMinutes() >= m)) {
       new Notification('Lexical Band', {
-        body: document.documentElement.lang === 'he'
-          ? 'הגיע זמן לתרגל אנגלית!'
-          : 'Time for your English practice!',
+        body:
+          document.documentElement.lang === 'he'
+            ? 'הגיע זמן לתרגל אנגלית!'
+            : 'Time for your English practice!',
         icon: '/icons/icon-192.png',
       });
       localStorage.setItem(

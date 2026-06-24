@@ -3,13 +3,8 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { BottomNav } from '../components/Layout';
-import {
-  getBandProgress,
-  getDueCount,
-  getDailySessionBreakdown,
-  getActiveVocabulary,
-  getVocabState,
-} from '../lib/progress';
+import { getBandProgress, getActiveVocabulary, getVocabState } from '../lib/progress';
+import { getWeekProgressSummary } from '../lib/weekPlan';
 import { getBands } from '../lib/vocabulary';
 import type { VocabularyId } from '../types';
 
@@ -35,15 +30,12 @@ export function HomePage() {
 
   const activeVocabulary = getActiveVocabulary(userData);
   const vocabState = getVocabState(userData, activeVocabulary);
-  const dueCount = getDueCount(userData, activeVocabulary);
-  const dailyBreakdown = getDailySessionBreakdown(userData, activeVocabulary);
+  const week = getWeekProgressSummary(userData, activeVocabulary);
   const name = userData.profile.name;
   const myListCount = vocabState.myList.length;
   const notPracticedToday = vocabState.myList.filter(
     (id) => !vocabState.myListPracticedToday.includes(id)
   ).length;
-  const goalMin = userData.profile.sessionMinutes;
-  const todayDone = userData.todayMinutes;
 
   const bandKeys = activeVocabulary === 'elementary' ? ELEMENTARY_BAND_KEYS : MIDDLE_BAND_KEYS;
   const bands = getBands(activeVocabulary).map((band, i) => ({
@@ -55,6 +47,8 @@ export function HomePage() {
   async function selectVocabulary(vocabularyId: VocabularyId) {
     await setActiveVocabulary(vocabularyId);
   }
+
+  const dailyDisabled = !week.moreLessonsAvailable || week.todaysNewCount === 0;
 
   return (
     <div className="app-shell">
@@ -108,30 +102,75 @@ export function HomePage() {
         </p>
 
         <div className="card">
-          <p style={{ marginBottom: 12, color: 'var(--color-text-muted)' }}>
-            {dueCount > 0 ? t('wordsDue', { count: dueCount }) : t('noWordsDue')}
-          </p>
-          {dailyBreakdown.totalCount > 0 && (
-            <div className="daily-breakdown">
-              <div className="daily-breakdown-row">
-                <span className="daily-breakdown-label">🆕 {t('newWordsToday')}</span>
-                <strong>{dailyBreakdown.newCount}</strong>
-              </div>
-              <div className="daily-breakdown-row">
-                <span className="daily-breakdown-label">🔁 {t('reviewWordsToday')}</span>
-                <strong>{dailyBreakdown.reviewCount}</strong>
-              </div>
-              {dailyBreakdown.myListCount > 0 && (
-                <div className="daily-breakdown-row">
-                  <span className="daily-breakdown-label">⭐ {t('myListWordsToday')}</span>
-                  <strong>{dailyBreakdown.myListCount}</strong>
-                </div>
-              )}
+          <h3 style={{ marginBottom: 12, fontSize: '1rem' }}>{t('weekPlanTitle')}</h3>
+          <div className="daily-breakdown">
+            <div className="daily-breakdown-row">
+              <span className="daily-breakdown-label">{t('weekDayLabel', { day: week.schoolDayLabel, total: 5 })}</span>
+              <strong>{week.completedDays}/5</strong>
             </div>
-          )}
-          <Link to="/practice/daily" className="btn btn-primary mt-12" style={{ textDecoration: 'none' }}>
-            {t('startDaily')}
+            <div className="daily-breakdown-row">
+              <span className="daily-breakdown-label">🆕 {t('newWordsToday')}</span>
+              <strong>{week.todaysNewCount}</strong>
+            </div>
+            <div className="daily-breakdown-row">
+              <span className="daily-breakdown-label">📚 {t('weekTotalWords')}</span>
+              <strong>{week.weekTotal}</strong>
+            </div>
+            <div className="daily-breakdown-row">
+              <span className="daily-breakdown-label">🔁 {t('cumulativeWeekWords')}</span>
+              <strong>{week.cumulativeCount}</strong>
+            </div>
+          </div>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 12 }}>
+            {t('wordsPerDaySetting', { count: week.wordsPerDay })}
+          </p>
+
+          <Link
+            to="/practice/daily"
+            className={`btn btn-primary mt-12${dailyDisabled ? ' disabled' : ''}`}
+            style={{
+              textDecoration: 'none',
+              display: 'block',
+              textAlign: 'center',
+              opacity: dailyDisabled ? 0.5 : 1,
+              pointerEvents: dailyDisabled ? 'none' : 'auto',
+            }}
+          >
+            {week.dailyDoneToday
+              ? t('weekLessonsComplete')
+              : week.completedDays > 0
+                ? t('continueNextLessonHome', {
+                    day: week.nextLessonDay !== null ? week.nextLessonDay + 1 : week.schoolDayLabel,
+                    count: week.todaysNewCount,
+                  })
+                : t('startDaily')}
           </Link>
+
+          {week.cumulativeCount > 0 && (
+            <Link
+              to="/practice/review"
+              className="btn btn-secondary mt-12"
+              style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}
+            >
+              {t('startWeekReview', { count: week.cumulativeCount })}
+            </Link>
+          )}
+
+          {week.examAvailable && !week.examCompleted && (
+            <Link
+              to="/practice/exam"
+              className="btn btn-secondary mt-12"
+              style={{ textDecoration: 'none', display: 'block', textAlign: 'center' }}
+            >
+              {t('startWeekExam', { count: week.weekTotal })}
+            </Link>
+          )}
+
+          {week.examCompleted && (
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-success)', marginTop: 12, textAlign: 'center' }}>
+              ✓ {t('weekExamDone')}
+            </p>
+          )}
         </div>
 
         <div className="card mylist-card">
@@ -189,13 +228,15 @@ export function HomePage() {
 
         <div className="card">
           <div className="progress-label">
-            <span>{t('todayGoal', { min: goalMin })}</span>
-            <span>{t('todayProgress', { done: todayDone, min: goalMin })}</span>
+            <span>{t('weekProgressLabel')}</span>
+            <span>
+              {week.completedDays}/5 {t('daysShort')}
+            </span>
           </div>
           <div className="progress-bar">
             <div
               className="progress-fill goal"
-              style={{ width: `${Math.min(100, (todayDone / goalMin) * 100)}%` }}
+              style={{ width: `${(week.completedDays / 5) * 100}%` }}
             />
           </div>
         </div>

@@ -27,7 +27,9 @@ export interface UserProfile {
   uiLanguage: 'he' | 'en';
   reminderTime: string;
   reminderEnabled: boolean;
-  sessionMinutes: 10 | 15;
+  wordsPerDay: 5 | 8 | 10 | 12 | 15;
+  /** @deprecated migrated to wordsPerDay */
+  sessionMinutes?: 10 | 15;
   onboarded: boolean;
   activeVocabulary: VocabularyId;
 }
@@ -44,11 +46,18 @@ export interface PracticeSession {
   durationSec: number;
   wordsCount: number;
   score: number;
-  type: 'daily' | 'mylist';
+  type: 'daily' | 'mylist' | 'review' | 'exam';
   vocabularyId: VocabularyId;
   wordIds?: number[];
   correctWordIds?: number[];
   missedWordIds?: number[];
+}
+
+export interface WeekPlan {
+  weekKey: string;
+  wordIds: number[];
+  completedDays: number[];
+  examCompleted: boolean;
 }
 
 export interface VocabularyState {
@@ -57,6 +66,7 @@ export interface VocabularyState {
   knownWords: number[];
   sessions: PracticeSession[];
   myListPracticedToday: number[];
+  weekPlan: WeekPlan | null;
 }
 
 export interface UserData {
@@ -77,7 +87,7 @@ export interface GameQuestion {
   correctOption?: string;
 }
 
-export type SessionType = 'daily' | 'mylist';
+export type SessionType = 'daily' | 'mylist' | 'review' | 'exam';
 
 export function emptyVocabularyState(): VocabularyState {
   return {
@@ -86,5 +96,6 @@ export function emptyVocabularyState(): VocabularyState {
     knownWords: [],
     sessions: [],
     myListPracticedToday: [],
+    weekPlan: null,
   };
 }

@@ -10,6 +10,7 @@
     "preview": "node scripts/phone-url.mjs 4173 && vite preview --host 0.0.0.0 --port 4173",
     "preview:phone": "npm run build && npm run preview",
     "import-words": "node scripts/import-excel.mjs",
+    "sync-translations": "node scripts/sync-google-translate.mjs",
     "test:supabase": "node scripts/test-supabase-auth.mjs"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "google-translate-api-x": "^10.7.3",
     "typescript": "~5.7.2",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^0.20.5",

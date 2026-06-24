@@ -111,7 +111,9 @@ export function OnboardingPage() {
   const [lang, setLang] = useState<'he' | 'en'>(userData?.profile.uiLanguage ?? 'he');
   const [reminderTime, setReminderTime] = useState(userData?.profile.reminderTime ?? '20:00');
   const [reminderEnabled, setReminderEnabled] = useState(userData?.profile.reminderEnabled ?? false);
-  const [sessionMinutes, setSessionMinutes] = useState<10 | 15>(userData?.profile.sessionMinutes ?? 10);
+  const [wordsPerDay, setWordsPerDay] = useState<5 | 8 | 10 | 12 | 15>(
+    userData?.profile.wordsPerDay ?? 10
+  );
 
   if (!userData) return null;
 
@@ -124,7 +126,7 @@ export function OnboardingPage() {
         uiLanguage: lang,
         reminderTime,
         reminderEnabled,
-        sessionMinutes,
+        wordsPerDay,
         onboarded: true,
       },
     };
@@ -197,15 +199,18 @@ export function OnboardingPage() {
 
         {step === 2 && (
           <div className="onboard-step">
-            <h2>{t('sessionLength')}</h2>
+            <h2>{t('wordsPerDay')}</h2>
+            <p style={{ color: 'var(--color-text-muted)', marginBottom: 16, fontSize: '0.875rem' }}>
+              {t('wordsPerDayOnboardHint')}
+            </p>
             <div className="lang-cards">
-              {([10, 15] as const).map((m) => (
+              {([5, 8, 10, 12, 15] as const).map((n) => (
                 <button
-                  key={m}
-                  className={`lang-card${sessionMinutes === m ? ' selected' : ''}`}
-                  onClick={() => setSessionMinutes(m)}
+                  key={n}
+                  className={`lang-card${wordsPerDay === n ? ' selected' : ''}`}
+                  onClick={() => setWordsPerDay(n)}
                 >
-                  {m === 10 ? t('minutes10') : t('minutes15')}
+                  {t('wordsPerDayOption', { count: n })}
                 </button>
               ))}
             </div>

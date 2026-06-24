@@ -1250,6 +1250,105 @@ a {
   margin-top: 4px;
 }
 
+.learn-words {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+
+.learn-words-hint {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.45;
+}
+
+.learn-words-count {
+  text-align: center;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.learn-words-card {
+  padding: 12px;
+}
+
+/* Fixed LTR columns so English stays under English header in Hebrew UI */
+.learn-words-table {
+  direction: ltr;
+}
+
+.learn-words-header,
+.learn-words-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+  gap: 8px;
+  align-items: center;
+}
+
+.learn-words-header {
+  padding: 8px 8px 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 6px;
+}
+
+.learn-words-col-en {
+  text-align: left;
+}
+
+.learn-words-col-he {
+  text-align: right;
+  direction: rtl;
+}
+
+.learn-words-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(58vh, 480px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.learn-words-row {
+  padding: 10px 8px;
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.learn-words-en {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  word-break: break-word;
+  text-align: left;
+  direction: ltr;
+}
+
+.learn-words-he {
+  font-size: 0.9375rem;
+  word-break: break-word;
+  text-align: right;
+  direction: rtl;
+}
+
+.learn-words-speaker {
+  flex-shrink: 0;
+  justify-self: center;
+}
+
+.learn-words-speaker-spacer {
+  width: 44px;
+  justify-self: center;
+}
+
+.learn-words-next {
+  margin-top: 4px;
+}
+
 @keyframes match-shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }

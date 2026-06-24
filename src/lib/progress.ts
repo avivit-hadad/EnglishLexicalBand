@@ -10,6 +10,16 @@ import { emptyVocabularyState } from '../types';
 import { getWords, getBands } from './vocabulary';
 import { todayStr, getWordById } from './words';
 import { randomUUID } from './uuid';
+import {
+  createWeekPlan,
+  getWeekKey,
+  getTodaysNewWordIds,
+  getCumulativeWeekWordIds,
+  getWordsPerDay,
+  getNextLessonDayIndex,
+  wordIdsToWords,
+  WORK_DAYS_PER_WEEK,
+} from './weekPlan';
 
 const STORAGE_PREFIX = 'lexical_band_';
 
@@ -51,12 +61,35 @@ export function migrateLegacyUserData(raw: Record<string, unknown>): UserData {
   if (!profile.activeVocabulary) {
     profile.activeVocabulary = 'elementary';
   }
-
-  if (raw.elementary && raw.middle) {
-    return raw as unknown as UserData;
+  if (!profile.wordsPerDay) {
+    profile.wordsPerDay = profile.sessionMinutes === 15 ? 12 : 10;
   }
 
-  const legacyState: VocabularyState = {
+  const migrateVocab = (state: Record<string, unknown> | VocabularyState): VocabularyState => {
+    const s = state as VocabularyState;
+    return {
+      wordProgress: s.wordProgress ?? {},
+      myList: s.myList ?? [],
+      knownWords: s.knownWords ?? [],
+      sessions: (s.sessions ?? []).map((sess) => ({
+        ...sess,
+        vocabularyId: sess.vocabularyId ?? 'elementary',
+      })),
+      myListPracticedToday: s.myListPracticedToday ?? [],
+      weekPlan: s.weekPlan ?? null,
+    };
+  };
+
+  if (raw.elementary && raw.middle) {
+    const data = raw as unknown as UserData;
+    return {
+      ...data,
+      elementary: migrateVocab(data.elementary),
+      middle: migrateVocab(data.middle),
+    };
+  }
+
+  const legacyState: VocabularyState = migrateVocab({
     wordProgress: (raw.wordProgress as VocabularyState['wordProgress']) ?? {},
     myList: (raw.myList as number[]) ?? [],
     knownWords: (raw.knownWords as number[]) ?? [],
@@ -65,7 +98,7 @@ export function migrateLegacyUserData(raw: Record<string, unknown>): UserData {
       vocabularyId: s.vocabularyId ?? 'elementary',
     })),
     myListPracticedToday: (raw.myListPracticedToday as number[]) ?? [],
-  };
+  });
 
   return {
     profile,
@@ -105,17 +138,62 @@ export function isWordActive(
   return !isWordKnown(data, wordId, vocabularyId);
 }
 
+export function ensureWeekPlan(data: UserData, vocabularyId?: VocabularyId): UserData {
+  const vocab = vocabularyId ?? getActiveVocabulary(data);
+  const state = getVocabState(data, vocab);
+  const weekKey = getWeekKey();
+  if (state.weekPlan?.weekKey === weekKey) return data;
+
+  return withVocabState(data, vocab, {
+    ...state,
+    weekPlan: createWeekPlan(data, vocab),
+  });
+}
+
+export function markDailyDayComplete(
+  data: UserData,
+  vocabularyId: VocabularyId,
+  lessonDayIndex: number
+): UserData {
+  const state = getVocabState(data, vocabularyId);
+  const plan = state.weekPlan;
+  if (!plan || lessonDayIndex < 0 || lessonDayIndex >= WORK_DAYS_PER_WEEK) return data;
+  if (plan.completedDays.includes(lessonDayIndex)) return data;
+
+  return withVocabState(data, vocabularyId, {
+    ...state,
+    weekPlan: {
+      ...plan,
+      completedDays: [...plan.completedDays, lessonDayIndex].sort((a, b) => a - b),
+    },
+  });
+}
+
+export function markWeekExamComplete(data: UserData, vocabularyId?: VocabularyId): UserData {
+  const vocab = vocabularyId ?? getActiveVocabulary(data);
+  const state = getVocabState(data, vocab);
+  const plan = state.weekPlan;
+  if (!plan) return data;
+
+  return withVocabState(data, vocab, {
+    ...state,
+    weekPlan: { ...plan, examCompleted: true },
+  });
+}
+
 export function loadUserData(userId: string): UserData | null {
   const raw = localStorage.getItem(STORAGE_PREFIX + userId);
   if (!raw) return null;
   try {
-    const data = migrateLegacyUserData(JSON.parse(raw) as Record<string, unknown>);
+    let data = migrateLegacyUserData(JSON.parse(raw) as Record<string, unknown>);
     if (data.todayDate !== todayStr()) {
       data.todayMinutes = 0;
       data.todayDate = todayStr();
       data.elementary = { ...data.elementary, myListPracticedToday: [] };
       data.middle = { ...data.middle, myListPracticedToday: [] };
     }
+    data = ensureWeekPlan(data, 'elementary');
+    data = ensureWeekPlan(data, 'middle');
     return data;
   } catch {
     return null;
@@ -249,10 +327,21 @@ export function getDueCount(data: UserData, vocabularyId?: VocabularyId): number
 }
 
 export function buildDailyWordQueue(data: UserData, vocabularyId?: VocabularyId): Word[] {
-  const due = getDueWords(data, 12, vocabularyId);
-  const band = getCurrentBand(data, vocabularyId);
-  const newWords = getNewWords(data, band, Math.max(0, 15 - due.length), vocabularyId);
-  return [...due, ...newWords].slice(0, 15);
+  const vocab = vocabularyId ?? getActiveVocabulary(data);
+  const ids = getTodaysNewWordIds(data, vocab);
+  return wordIdsToWords(ids, vocab);
+}
+
+export function buildReviewWordQueue(data: UserData, vocabularyId?: VocabularyId): Word[] {
+  const vocab = vocabularyId ?? getActiveVocabulary(data);
+  const ids = getCumulativeWeekWordIds(data, vocab);
+  return wordIdsToWords(ids, vocab);
+}
+
+export function buildExamWordQueue(data: UserData, vocabularyId?: VocabularyId): Word[] {
+  const vocab = vocabularyId ?? getActiveVocabulary(data);
+  const plan = getVocabState(data, vocab).weekPlan;
+  return wordIdsToWords(plan?.wordIds ?? [], vocab);
 }
 
 export interface DailySessionBreakdown {
@@ -260,25 +349,30 @@ export interface DailySessionBreakdown {
   reviewCount: number;
   myListCount: number;
   totalCount: number;
+  weekDay: number;
+  weekTotal: number;
+  cumulativeCount: number;
 }
 
 export function getDailySessionBreakdown(
   data: UserData,
   vocabularyId?: VocabularyId
 ): DailySessionBreakdown {
-  const due = getDueWords(data, 12, vocabularyId);
-  const band = getCurrentBand(data, vocabularyId);
-  const newWords = getNewWords(data, band, Math.max(0, 15 - due.length), vocabularyId);
-  const myListCount =
-    getVocabState(data, vocabularyId).myList.length > 0
-      ? Math.min(5, buildMyListQueue(data, vocabularyId).length)
-      : 0;
+  const vocab = vocabularyId ?? getActiveVocabulary(data);
+  const newWords = buildDailyWordQueue(data, vocab);
+  const cumulativeCount = getCumulativeWeekWordIds(data, vocab).length;
+  const wordsPerDay = getWordsPerDay(data);
+  const weekTotal = wordsPerDay * WORK_DAYS_PER_WEEK;
+  const nextLessonDay = getNextLessonDayIndex(getVocabState(data, vocab).weekPlan);
 
   return {
     newCount: newWords.length,
-    reviewCount: due.length,
-    myListCount,
-    totalCount: due.length + newWords.length + myListCount,
+    reviewCount: cumulativeCount,
+    myListCount: 0,
+    totalCount: newWords.length,
+    weekDay: nextLessonDay !== null ? nextLessonDay + 1 : 5,
+    weekTotal,
+    cumulativeCount,
   };
 }
 
@@ -296,13 +390,14 @@ export function buildMyListQueue(data: UserData, vocabularyId?: VocabularyId): W
 
 export function recordSession(
   data: UserData,
-  type: 'daily' | 'mylist',
+  type: 'daily' | 'mylist' | 'review' | 'exam',
   durationSec: number,
   wordsCount: number,
   score: number,
   practicedWordIds: number[],
   missedWordIds: number[] = [],
-  vocabularyId?: VocabularyId
+  vocabularyId?: VocabularyId,
+  lessonDayIndex?: number
 ): UserData {
   const vocab = vocabularyId ?? getActiveVocabulary(data);
   const state = getVocabState(data, vocab);
@@ -345,12 +440,21 @@ export function recordSession(
       ? [...new Set([...state.myListPracticedToday, ...practicedWordIds])]
       : state.myListPracticedToday;
 
+  let next = withVocabState(data, vocab, {
+    ...state,
+    sessions: [session, ...state.sessions].slice(0, 100),
+    myListPracticedToday,
+  });
+
+  if (type === 'daily' && lessonDayIndex !== undefined) {
+    next = markDailyDayComplete(next, vocab, lessonDayIndex);
+  }
+  if (type === 'exam') {
+    next = markWeekExamComplete(next, vocab);
+  }
+
   return {
-    ...withVocabState(data, vocab, {
-      ...state,
-      sessions: [session, ...state.sessions].slice(0, 100),
-      myListPracticedToday,
-    }),
+    ...next,
     streak,
     todayMinutes: data.todayMinutes + Math.round(durationSec / 60),
     todayDate: today,

@@ -75,16 +75,19 @@ export function SettingsPage() {
         </div>
 
         <div className="card">
-          <h3 style={{ marginBottom: 8 }}>{t('sessionLength')}</h3>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {([10, 15] as const).map((m) => (
+          <h3 style={{ marginBottom: 8 }}>{t('wordsPerDay')}</h3>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
+            {t('wordsPerDayHint', { total: userData.profile.wordsPerDay * 5 })}
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {([5, 8, 10, 12, 15] as const).map((n) => (
               <button
-                key={m}
-                className={`btn btn-sm${userData.profile.sessionMinutes === m ? ' btn-secondary' : ' btn-ghost'}`}
-                style={{ flex: 1 }}
-                onClick={() => updateProfile({ sessionMinutes: m })}
+                key={n}
+                className={`btn btn-sm${userData.profile.wordsPerDay === n ? ' btn-secondary' : ' btn-ghost'}`}
+                style={{ flex: '1 1 30%' }}
+                onClick={() => updateProfile({ wordsPerDay: n })}
               >
-                {m === 10 ? t('minutes10') : t('minutes15')}
+                {t('wordsPerDayOption', { count: n })}
               </button>
             ))}
           </div>

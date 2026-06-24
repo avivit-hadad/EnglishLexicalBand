@@ -136,7 +136,7 @@ async function cloudRegister(name: string, password: string): Promise<AuthUser> 
     uiLanguage: 'he' as const,
     reminderTime: '20:00',
     reminderEnabled: false,
-    sessionMinutes: 10 as const,
+    wordsPerDay: 10 as const,
     onboarded: false,
     activeVocabulary: 'elementary' as const,
   };
@@ -192,7 +192,7 @@ export async function signUp(name: string, password: string): Promise<AuthUser> 
     uiLanguage: 'he' as const,
     reminderTime: '20:00',
     reminderEnabled: false,
-    sessionMinutes: 10 as const,
+    wordsPerDay: 10 as const,
     onboarded: false,
     activeVocabulary: 'elementary' as const,
   };
