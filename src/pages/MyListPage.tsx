@@ -1,9 +1,11 @@
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../context/AppContext';
 import { BottomNav, Header } from '../components/Layout';
 import { searchWords, getWordById, getMasteryPercent } from '../lib/words';
 import { getWordProgress, toggleMyList, toggleKnownWord, isWordKnown, getActiveVocabulary, getVocabState } from '../lib/progress';
+import { vocabularyDashboardPath } from '../lib/homeNav';
 
 export function MyListPage() {
   const { t } = useTranslation();
@@ -25,13 +27,25 @@ export function MyListPage() {
 
   async function handleToggle(wordId: number) {
     if (!userData) return;
-    await updateData(toggleMyList(userData, wordId));
+    await updateData(toggleMyList(userData, wordId, vocabularyId));
   }
+
+  const dashboardPath = vocabularyDashboardPath(vocabularyId);
 
   return (
     <div className="app-shell">
-      <Header title={t('myList')} backTo="/" />
+      <Header title={t('myList')} backTo={dashboardPath} />
       <main className="page page-full">
+        {listWords.length > 0 && (
+          <Link
+            to="/practice/mylist"
+            state={{ vocabularyId, returnTo: dashboardPath }}
+            className="btn btn-primary"
+            style={{ textDecoration: 'none', display: 'block', textAlign: 'center', marginBottom: 12 }}
+          >
+            {t('practiceMyList')}
+          </Link>
+        )}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <input
             className="form-input"
@@ -72,7 +86,7 @@ export function MyListPage() {
                       {!known && (
                         <button
                           className="icon-btn known-add"
-                          onClick={() => userData && updateData(toggleKnownWord(userData, word.id))}
+                          onClick={() => userData && updateData(toggleKnownWord(userData, word.id, vocabularyId))}
                           title={t('markKnown')}
                         >
                           ✓

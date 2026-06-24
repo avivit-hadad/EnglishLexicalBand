@@ -54,10 +54,14 @@ export interface PracticeSession {
 }
 
 export interface WeekPlan {
-  weekKey: string;
+  /** Which group of 5 lessons (0 = lessons 1–5, 1 = lessons 6–10, …) */
+  batchIndex: number;
   wordIds: number[];
+  /** Lesson index within the current batch (0–4) */
   completedDays: number[];
   examCompleted: boolean;
+  /** @deprecated Calendar week; no longer resets progress */
+  weekKey?: string;
 }
 
 export interface VocabularyState {

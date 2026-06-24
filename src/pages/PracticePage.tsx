@@ -6,14 +6,19 @@ import { Header } from '../components/Layout';
 import { FlashMatch } from '../components/GameModes';
 import { SessionWordList } from '../components/SessionWordList';
 import { MatchDragDrop } from '../components/MatchDragDrop';
-import { buildSessionPlan, buildQuestion, buildWordListPlan, getSessionWords, type SessionPlan } from '../lib/session';
+import { buildSessionPlan, buildDailySessionPlan, buildQuestion, buildWordListPlan, getSessionWords, filterKnownWordsFromPlan, type SessionPlan } from '../lib/session';
 import { getWordById } from '../lib/words';
-import { updateWordProgress, recordSession, toggleMyList, markWordKnown, getDailySessionBreakdown, getActiveVocabulary, getVocabState } from '../lib/progress';
+import { updateWordProgress, recordSession, toggleMyList, markWordKnown, toggleKnownWord, getDailySessionBreakdown, getActiveVocabulary, getVocabState } from '../lib/progress';
 import type { SessionType, Word, VocabularyId } from '../types';
 import { LearnWordsScreen } from '../components/LearnWordsScreen';
-import { getNextLessonDayIndex, getWeekPlan } from '../lib/weekPlan';
+import { getNextLessonDayIndex, getWeekPlan, getGlobalLessonNumber, getWordsPerDay, getCurrentBatchIndex } from '../lib/weekPlan';
+import { vocabularyDashboardPath } from '../lib/homeNav';
 
 type Phase = 'intro' | 'learn' | 'playing' | 'review' | 'matching' | 'done' | 'recheck' | 'recheck-done';
+
+function countPlanWords(plan: SessionPlan): number {
+  return plan.rounds.reduce((sum, round) => sum + round.words.length, 0);
+}
 
 interface SessionSummary {
   knownWords: Word[];
@@ -45,6 +50,9 @@ interface CustomPracticeState {
   wordIds?: number[];
   returnTo?: string;
   vocabularyId?: VocabularyId;
+  lessonDayIndex?: number;
+  startAtLearn?: boolean;
+  viewBatchIndex?: number;
 }
 
 export function PracticePage() {
@@ -57,7 +65,11 @@ export function PracticePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const customState = (location.state as CustomPracticeState | null) ?? {};
-  const returnTo = customState.returnTo ?? '/';
+  const practiceVocabularyId =
+    customState.vocabularyId ?? userData?.profile.activeVocabulary ?? 'elementary';
+  const returnTo =
+    customState.returnTo ??
+    (sessionType === 'mylist' ? vocabularyDashboardPath(practiceVocabularyId) : '/');
 
   const [phase, setPhase] = useState<Phase>('intro');
   const [roundIndex, setRoundIndex] = useState(0);
@@ -74,9 +86,11 @@ export function PracticePage() {
   const [recheckCorrect, setRecheckCorrect] = useState(0);
   const [recheckWrong, setRecheckWrong] = useState(0);
   const [recheckMissedIds, setRecheckMissedIds] = useState<number[]>([]);
+  const [recheckReturnPhase, setRecheckReturnPhase] = useState<'done' | 'recheck-done'>('done');
   const [matchingWords, setMatchingWords] = useState<Word[]>([]);
   const [liveData, setLiveData] = useState(userData);
   const [sessionPlan, setSessionPlan] = useState<SessionPlan | null>(null);
+  const [sessionDotTotal, setSessionDotTotal] = useState(0);
 
   const customPreviewPlan = useMemo(() => {
     if (!isCustom || !customState.wordIds?.length) return null;
@@ -87,8 +101,8 @@ export function PracticePage() {
   const previewPlan = useMemo(() => {
     if (isCustom) return customPreviewPlan;
     if (!userData) return null;
-    return buildSessionPlan(sessionType, userData);
-  }, [isCustom, customPreviewPlan, userData, sessionType]);
+    return buildSessionPlan(sessionType, userData, practiceVocabularyId);
+  }, [isCustom, customPreviewPlan, userData, sessionType, practiceVocabularyId]);
 
   const plan = sessionPlan ?? previewPlan;
   const hasLearnStep =
@@ -118,8 +132,53 @@ export function PracticePage() {
     if (!isCustom || !userData || !customPreviewPlan?.rounds.length || phase !== 'intro') return;
     setSessionPlan(customPreviewPlan);
     setLiveData(userData);
+    setSessionDotTotal(countPlanWords(customPreviewPlan));
     setPhase('playing');
   }, [isCustom, userData, customPreviewPlan, phase]);
+
+  useEffect(() => {
+    if (sessionType !== 'daily' || !userData || phase !== 'intro') return;
+    const lessonDayIndex = customState.lessonDayIndex;
+    if (lessonDayIndex === undefined || !customState.startAtLearn) return;
+
+    const vocabularyId = practiceVocabularyId;
+    const viewBatch = customState.viewBatchIndex;
+    const dayPlan = buildDailySessionPlan(userData, vocabularyId, lessonDayIndex, viewBatch);
+    if (!dayPlan.rounds.length) return;
+
+    setSessionPlan(dayPlan);
+    setLiveData(userData);
+    setPhase('learn');
+    navigate(location.pathname, {
+      replace: true,
+      state: {
+        returnTo: customState.returnTo ?? '/',
+        lessonDayIndex: customState.lessonDayIndex,
+        viewBatchIndex: viewBatch,
+        vocabularyId: practiceVocabularyId,
+      },
+    });
+  }, [
+    sessionType,
+    userData,
+    phase,
+    customState.lessonDayIndex,
+    customState.startAtLearn,
+    customState.returnTo,
+    customState.viewBatchIndex,
+    practiceVocabularyId,
+    location.pathname,
+    navigate,
+  ]);
+
+  function resetPlayingProgress() {
+    setSessionDotTotal(0);
+  }
+
+  function startPlayingPhase(nextPlan: SessionPlan) {
+    setSessionDotTotal(countPlanWords(nextPlan));
+    setPhase('playing');
+  }
 
   const recordType: SessionType = isCustom ? 'mylist' : sessionType;
 
@@ -133,6 +192,9 @@ export function PracticePage() {
     }
     const durationSec = Math.round((Date.now() - startedAt) / 1000);
     const score = correct * 10;
+    const currentBatch = getCurrentBatchIndex(liveData, plan.vocabularyId);
+    const isPastBatchReplay =
+      plan.viewBatchIndex !== undefined && plan.viewBatchIndex < currentBatch;
     const data = recordSession(
       liveData,
       recordType,
@@ -142,7 +204,7 @@ export function PracticePage() {
       practicedIds,
       missedIds,
       plan.vocabularyId,
-      sessionType === 'daily' ? plan.lessonDayIndex : undefined
+      sessionType === 'daily' && !isPastBatchReplay ? plan.lessonDayIndex : undefined
     );
     await updateData(data);
     setLiveData(data);
@@ -166,17 +228,19 @@ export function PracticePage() {
     setSessionSummary(null);
     setMatchingWords([]);
     setStartedAt(Date.now());
+    resetPlayingProgress();
 
     if (getSessionWords(nextPlan).length > 0) {
       setPhase('learn');
     } else {
-      setPhase('playing');
+      startPlayingPhase(nextPlan);
     }
   }
 
-  function startRecheck(words?: Word[]) {
+  function startRecheck(words?: Word[], returnPhase: 'done' | 'recheck-done' = 'done') {
     const toRecheck = words ?? sessionSummary?.missedWords ?? [];
     if (toRecheck.length === 0) return;
+    setRecheckReturnPhase(returnPhase);
     setRecheckWords(toRecheck);
     setRecheckIndex(0);
     setRecheckCorrect(0);
@@ -262,7 +326,9 @@ export function PracticePage() {
         const missed = missedIds
           .map((id) => allWords.find((w) => w.id === id))
           .filter(Boolean) as Word[];
-        setReviewWords(missed.slice(0, 5));
+        const review = missed.slice(0, 5);
+        setReviewWords(review);
+        setSessionDotTotal(countPlanWords(plan) + review.length);
         setPhase('review');
         setWordIndex(0);
         return;
@@ -348,7 +414,7 @@ export function PracticePage() {
 
     return (
       <div className="app-shell">
-        <Header title={introTitle} backTo="/" />
+        <Header title={introTitle} backTo={returnTo} />
         <main className="page page-no-nav">
           <div className="session-intro">
             {sessionType === 'daily' && dailyBreakdown && (
@@ -397,14 +463,14 @@ export function PracticePage() {
               className="btn btn-primary"
               onClick={() => {
                 if (userData) {
-                  const nextPlan = buildSessionPlan(sessionType, userData);
+                  const nextPlan = buildSessionPlan(sessionType, userData, practiceVocabularyId);
                   setSessionPlan(nextPlan);
                   setLiveData(userData);
                   if (hasLearnStep && getSessionWords(nextPlan).length > 0) {
                     setPhase('learn');
                   } else {
                     setStartedAt(Date.now());
-                    setPhase('playing');
+                    startPlayingPhase(nextPlan);
                   }
                 }
               }}
@@ -423,17 +489,34 @@ export function PracticePage() {
         ? t('weekExamLearn')
         : sessionType === 'review'
           ? t('weekReviewLearn')
-          : t('learnWordsTitle');
+          : plan.lessonNumber !== undefined
+            ? t('learnWordsTitleStage', { stage: plan.lessonNumber })
+            : plan.lessonDayIndex !== undefined
+              ? t('learnWordsTitleStage', { stage: plan.lessonDayIndex + 1 })
+            : t('learnWordsTitle');
 
     return (
       <div className="app-shell">
-        <Header title={learnTitle} backTo="/" />
+        <Header title={learnTitle} backTo={returnTo} />
         <main className="page page-no-nav">
           <LearnWordsScreen
             words={learnWords}
-            onNext={() => {
+            knownWordIds={getVocabState(liveData, plan.vocabularyId).knownWords}
+            onToggleKnown={(wordId) => {
+              setLiveData(toggleKnownWord(liveData, wordId, plan.vocabularyId));
+            }}
+            onNext={async () => {
+              const filtered = filterKnownWordsFromPlan(plan, liveData);
+              await updateData(liveData);
+
+              if (!filtered.rounds.length) {
+                navigate(returnTo);
+                return;
+              }
+
+              setSessionPlan(filtered);
               setStartedAt(Date.now());
-              setPhase('playing');
+              startPlayingPhase(filtered);
             }}
           />
         </main>
@@ -464,9 +547,15 @@ export function PracticePage() {
             ? '⭐⭐'
             : '⭐';
 
+    const weekPlan = liveData && plan ? getWeekPlan(liveData, plan.vocabularyId) : null;
+    const wordsPerDay = liveData ? getWordsPerDay(liveData) : 10;
     const nextLessonDay =
-      sessionType === 'daily' && liveData && plan
-        ? getNextLessonDayIndex(getWeekPlan(liveData, plan.vocabularyId))
+      sessionType === 'daily' && weekPlan
+        ? getNextLessonDayIndex(weekPlan, wordsPerDay)
+        : null;
+    const nextLessonNumber =
+      nextLessonDay !== null && weekPlan
+        ? getGlobalLessonNumber(weekPlan, nextLessonDay)
         : null;
     const nextLessonCount =
       nextLessonDay !== null && liveData && plan
@@ -504,14 +593,14 @@ export function PracticePage() {
           </div>
 
           <div className="session-summary-actions">
-            {sessionType === 'daily' && nextLessonDay !== null && nextLessonCount > 0 && (
+            {sessionType === 'daily' && nextLessonNumber !== null && nextLessonCount > 0 && (
               <button className="btn btn-primary" type="button" onClick={startNextLesson}>
-                {t('continueNextLesson', { day: nextLessonDay + 1, count: nextLessonCount })}
+                {t('continueNextLesson', { day: nextLessonNumber, count: nextLessonCount })}
               </button>
             )}
             {sessionSummary.missedWords.length > 0 && (
               <button
-                className={`btn ${sessionType === 'daily' && nextLessonDay !== null && nextLessonCount > 0 ? 'btn-secondary' : 'btn-primary'}`}
+                className={`btn ${sessionType === 'daily' && nextLessonNumber !== null && nextLessonCount > 0 ? 'btn-secondary' : 'btn-primary'}`}
                 type="button"
                 onClick={() => startRecheck()}
               >
@@ -534,7 +623,7 @@ export function PracticePage() {
 
     return (
       <div className="app-shell">
-        <Header title={t('recheckComplete')} backTo="/" />
+        <Header title={t('recheckComplete')} onBack={() => setPhase('done')} />
         <main className="page page-no-nav session-summary-page">
           <div className="card">
             <h2 className="results-title">{t('recheckComplete')}</h2>
@@ -552,7 +641,7 @@ export function PracticePage() {
               <button
                 className="btn btn-primary"
                 type="button"
-                onClick={() => startRecheck(stillMissedWords)}
+                onClick={() => startRecheck(stillMissedWords, 'recheck-done')}
               >
                 {t('recheckMissed')}
               </button>
@@ -579,7 +668,7 @@ export function PracticePage() {
 
     return (
       <div className="app-shell">
-        <Header title={t('recheckMissed')} backTo={returnTo} />
+        <Header title={t('recheckMissed')} onBack={() => setPhase(recheckReturnPhase)} />
         <div className="game-progress">
           <div className="game-dots">
             {recheckWords.map((_, i) => (
@@ -611,21 +700,26 @@ export function PracticePage() {
 
   const vocabularyId = plan.vocabularyId;
   const inMyList = getVocabState(liveData, vocabularyId).myList.includes(currentWord.id);
-  const totalWords = isReview
-    ? reviewWords.length
-    : plan.rounds.reduce((s, r) => s + r.words.length, 0);
+  const mainWordCount = countPlanWords(plan);
+  const progressDotTotal = sessionDotTotal || mainWordCount;
   const doneWords = isReview
-    ? wordIndex
+    ? mainWordCount + wordIndex
     : plan.rounds.slice(0, roundIndex).reduce((s, r) => s + r.words.length, 0) + wordIndex;
+  const progressLabelTotal = progressDotTotal;
 
   const gameKey = `${phase}-${roundIndex}-${wordIndex}-${currentWord.id}`;
+  const canBackToLearn = hasLearnStep && learnWords.length > 0;
 
   return (
     <div className="app-shell">
-      <Header title={t(currentRound.label as 'flashMatch')} backTo={isCustom ? returnTo : '/'} />
+      <Header
+        title={t(currentRound.label as 'flashMatch')}
+        onBack={canBackToLearn ? () => setPhase('learn') : undefined}
+        backTo={canBackToLearn ? undefined : returnTo}
+      />
       <div className="game-progress">
-        <div className="game-dots">
-          {Array.from({ length: Math.min(totalWords, 20) }).map((_, i) => (
+        <div className={`game-dots${progressDotTotal > 20 ? ' game-dots-compact' : ''}`}>
+          {Array.from({ length: progressDotTotal }).map((_, i) => (
             <div
               key={i}
               className={`game-dot${i < doneWords ? ' done' : i === doneWords ? ' current' : ''}`}
@@ -633,7 +727,7 @@ export function PracticePage() {
           ))}
         </div>
         <span>
-          {doneWords + 1}/{totalWords}
+          {Math.min(doneWords + 1, progressLabelTotal)}/{progressLabelTotal}
         </span>
       </div>
 

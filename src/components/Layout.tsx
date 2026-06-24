@@ -27,12 +27,26 @@ export function BottomNav() {
   );
 }
 
-export function Header({ title, backTo }: { title: string; backTo?: string }) {
+export function Header({
+  title,
+  backTo,
+  onBack,
+}: {
+  title: string;
+  backTo?: string;
+  onBack?: () => void;
+}) {
+  const backArrow = document.documentElement.dir === 'rtl' ? '→' : '←';
+
   return (
     <header className="header">
-      {backTo ? (
+      {onBack ? (
+        <button type="button" className="header-back" onClick={onBack} aria-label="Back">
+          {backArrow}
+        </button>
+      ) : backTo ? (
         <NavLink to={backTo} className="header-back">
-          {document.documentElement.dir === 'rtl' ? '→' : '←'}
+          {backArrow}
         </NavLink>
       ) : (
         <span style={{ width: 44 }} />

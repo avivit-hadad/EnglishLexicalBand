@@ -7,9 +7,16 @@ import {
   signOut,
   persistUserData,
   loadUserDataFromCloud,
+  syncUserDataToCloud,
   type AuthUser,
 } from '../lib/auth';
-import { createDefaultUserData, loadUserData, setActiveVocabulary as setVocabulary, ensureWeekPlan } from '../lib/progress';
+import {
+  createDefaultUserData,
+  loadUserData,
+  saveUserData,
+  setActiveVocabulary as setVocabulary,
+  ensureWeekPlan,
+} from '../lib/progress';
 import { initUiLanguage, setUiLanguage } from '../i18n';
 
 interface AppContextValue {
@@ -21,10 +28,15 @@ interface AppContextValue {
   logout: () => Promise<void>;
   updateData: (data: UserData) => Promise<void>;
   refreshData: () => Promise<void>;
-  setActiveVocabulary: (vocabularyId: VocabularyId) => Promise<void>;
+  setActiveVocabulary: (vocabularyId: VocabularyId) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+function saveLocallyAndSync(userId: string, data: UserData): void {
+  saveUserData(userId, data);
+  void syncUserDataToCloud(userId, data);
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -59,7 +71,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!data.profile.wordsPerDay) {
       data.profile.wordsPerDay = 10;
     }
-    data = ensureWeekPlan(data, data.profile.activeVocabulary);
+    data = ensureWeekPlan(data, 'elementary');
+    data = ensureWeekPlan(data, 'middle');
     initUiLanguage(data.profile.uiLanguage);
     setUserData(data);
   }, []);
@@ -94,17 +107,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     setUserData(data);
     setUiLanguage(data.profile.uiLanguage);
-    await persistUserData(user.id, data);
+    saveLocallyAndSync(user.id, data);
   };
 
   const refreshData = async () => {
     if (user) await loadData(user);
   };
 
-  const setActiveVocabulary = async (vocabularyId: VocabularyId) => {
-    if (!userData) return;
-    await updateData(setVocabulary(userData, vocabularyId));
-  };
+  const setActiveVocabulary = useCallback((vocabularyId: VocabularyId) => {
+    if (!user) return;
+    setUserData((current) => {
+      if (!current) return current;
+      let next =
+        current.profile.activeVocabulary === vocabularyId
+          ? current
+          : setVocabulary(current, vocabularyId);
+      next = ensureWeekPlan(next, vocabularyId);
+      if (next === current) return current;
+      saveLocallyAndSync(user.id, next);
+      return next;
+    });
+  }, [user]);
 
   return (
     <AppContext.Provider

@@ -6,6 +6,7 @@ import {
   loadUserData,
   createDefaultUserData,
   migrateLegacyUserData,
+  ensureWeekPlan,
 } from './progress';
 
 const rawUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -265,7 +266,9 @@ export async function loadUserDataFromCloud(userId: string): Promise<UserData | 
   }
 
   if (data?.data) {
-    const userData = migrateLegacyUserData(data.data as Record<string, unknown>);
+    let userData = migrateLegacyUserData(data.data as Record<string, unknown>);
+    userData = ensureWeekPlan(userData, 'elementary');
+    userData = ensureWeekPlan(userData, 'middle');
     saveUserData(userId, userData);
     return userData;
   }

@@ -12,11 +12,15 @@ import { todayStr, getWordById } from './words';
 import { randomUUID } from './uuid';
 import {
   createWeekPlan,
-  getWeekKey,
+  normalizeWeekPlan,
+  normalizeWeekPlanShape,
+  advanceToNextBatch,
+  pickBatchWordIds,
   getTodaysNewWordIds,
   getCumulativeWeekWordIds,
   getWordsPerDay,
   getNextLessonDayIndex,
+  getLessonsInBatch,
   wordIdsToWords,
   WORK_DAYS_PER_WEEK,
 } from './weekPlan';
@@ -141,12 +145,29 @@ export function isWordActive(
 export function ensureWeekPlan(data: UserData, vocabularyId?: VocabularyId): UserData {
   const vocab = vocabularyId ?? getActiveVocabulary(data);
   const state = getVocabState(data, vocab);
-  const weekKey = getWeekKey();
-  if (state.weekPlan?.weekKey === weekKey) return data;
+
+  if (!state.weekPlan) {
+    return withVocabState(data, vocab, {
+      ...state,
+      weekPlan: createWeekPlan(data, vocab),
+    });
+  }
+
+  const normalized = normalizeWeekPlan(data, vocab, normalizeWeekPlanShape(state.weekPlan));
+  const prev = state.weekPlan;
+  const same =
+    (prev.batchIndex ?? 0) === normalized.batchIndex &&
+    prev.examCompleted === normalized.examCompleted &&
+    prev.completedDays.length === normalized.completedDays.length &&
+    prev.completedDays.every((d, i) => d === normalized.completedDays[i]) &&
+    prev.wordIds.length === normalized.wordIds.length &&
+    prev.wordIds.every((id, i) => id === normalized.wordIds[i]);
+
+  if (same) return data;
 
   return withVocabState(data, vocab, {
     ...state,
-    weekPlan: createWeekPlan(data, vocab),
+    weekPlan: normalized,
   });
 }
 
@@ -160,12 +181,17 @@ export function markDailyDayComplete(
   if (!plan || lessonDayIndex < 0 || lessonDayIndex >= WORK_DAYS_PER_WEEK) return data;
   if (plan.completedDays.includes(lessonDayIndex)) return data;
 
+  const wordsPerDay = getWordsPerDay(data);
+  const completedDays = [...plan.completedDays, lessonDayIndex].sort((a, b) => a - b);
+  let nextPlan: typeof plan = { ...plan, completedDays };
+
+  if (nextPlan.completedDays.length >= getLessonsInBatch(nextPlan, wordsPerDay)) {
+    nextPlan = advanceToNextBatch(data, vocabularyId, nextPlan);
+  }
+
   return withVocabState(data, vocabularyId, {
     ...state,
-    weekPlan: {
-      ...plan,
-      completedDays: [...plan.completedDays, lessonDayIndex].sort((a, b) => a - b),
-    },
+    weekPlan: nextPlan,
   });
 }
 
@@ -344,6 +370,73 @@ export function buildExamWordQueue(data: UserData, vocabularyId?: VocabularyId):
   return wordIdsToWords(plan?.wordIds ?? [], vocab);
 }
 
+/** Words practiced in daily lessons, excluding those marked as known */
+export function getLearnedWordIds(data: UserData, vocabularyId: VocabularyId): number[] {
+  const state = getVocabState(data, vocabularyId);
+  const known = new Set(state.knownWords);
+  const ids = new Set<number>();
+
+  for (const session of state.sessions) {
+    if (session.type === 'daily' && session.wordIds?.length) {
+      for (const id of session.wordIds) ids.add(id);
+    }
+  }
+
+  const plan = state.weekPlan;
+  if (plan) {
+    const perDay = getWordsPerDay(data);
+    for (let batch = 0; batch < (plan.batchIndex ?? 0); batch++) {
+      for (const id of pickBatchWordIds(data, vocabularyId, batch)) ids.add(id);
+    }
+    for (const dayIdx of plan.completedDays) {
+      const chunk = plan.wordIds.slice(dayIdx * perDay, dayIdx * perDay + perDay);
+      for (const id of chunk) ids.add(id);
+    }
+  }
+
+  return [...ids].filter((id) => !known.has(id));
+}
+
+export function getLearnedWords(data: UserData, vocabularyId: VocabularyId): Word[] {
+  return getLearnedWordIds(data, vocabularyId)
+    .map((id) => getWordById(id, vocabularyId))
+    .filter(Boolean)
+    .sort((a, b) => a!.entry.localeCompare(b!.entry)) as Word[];
+}
+
+/** Unique words touched so far: learned in lessons + known + on practice list */
+export function getProgressWordTotal(data: UserData, vocabularyId: VocabularyId): number {
+  const state = getVocabState(data, vocabularyId);
+  const ids = new Set<number>();
+  for (const id of getLearnedWordIds(data, vocabularyId)) ids.add(id);
+  for (const id of state.knownWords) ids.add(id);
+  for (const id of state.myList) ids.add(id);
+  return ids.size;
+}
+
+export interface VocabularyProgressStats {
+  learned: number;
+  toPractice: number;
+  known: number;
+  totalSoFar: number;
+}
+
+export function getVocabularyProgressStats(
+  data: UserData,
+  vocabularyId: VocabularyId
+): VocabularyProgressStats {
+  const state = getVocabState(data, vocabularyId);
+  const learned = getLearnedWordIds(data, vocabularyId).length;
+  const toPractice = state.myList.length;
+  const known = state.knownWords.length;
+  return {
+    learned,
+    toPractice,
+    known,
+    totalSoFar: getProgressWordTotal(data, vocabularyId),
+  };
+}
+
 export interface DailySessionBreakdown {
   newCount: number;
   reviewCount: number;
@@ -363,7 +456,8 @@ export function getDailySessionBreakdown(
   const cumulativeCount = getCumulativeWeekWordIds(data, vocab).length;
   const wordsPerDay = getWordsPerDay(data);
   const weekTotal = wordsPerDay * WORK_DAYS_PER_WEEK;
-  const nextLessonDay = getNextLessonDayIndex(getVocabState(data, vocab).weekPlan);
+  const plan = getVocabState(data, vocab).weekPlan;
+  const nextLessonDay = getNextLessonDayIndex(plan, wordsPerDay);
 
   return {
     newCount: newWords.length,
@@ -381,8 +475,7 @@ export function buildMyListQueue(data: UserData, vocabularyId?: VocabularyId): W
   const state = getVocabState(data, vocab);
   const listWords = state.myList
     .map((id) => getWords(vocab).find((w) => w.id === id))
-    .filter(Boolean)
-    .filter((w) => isWordActive(data, w!.id, vocab)) as Word[];
+    .filter(Boolean) as Word[];
   const notToday = listWords.filter((w) => !state.myListPracticedToday.includes(w.id));
   const pool = notToday.length > 0 ? notToday : listWords;
   return pool.slice(0, 10);

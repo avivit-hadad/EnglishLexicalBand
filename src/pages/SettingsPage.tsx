@@ -75,10 +75,7 @@ export function SettingsPage() {
         </div>
 
         <div className="card">
-          <h3 style={{ marginBottom: 8 }}>{t('wordsPerDay')}</h3>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            {t('wordsPerDayHint', { total: userData.profile.wordsPerDay * 5 })}
-          </p>
+          <h3 style={{ marginBottom: 12 }}>{t('wordsPerDay')}</h3>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {([5, 8, 10, 12, 15] as const).map((n) => (
               <button

@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { BottomNav, Header } from '../components/Layout';
 import { searchWords, getWordById } from '../lib/words';
 import { toggleKnownWord, isWordKnown, getActiveVocabulary, getVocabState } from '../lib/progress';
+import { vocabularyDashboardPath } from '../lib/homeNav';
 
 export function KnownWordsPage() {
   const { t } = useTranslation();
@@ -31,7 +32,7 @@ export function KnownWordsPage() {
 
   return (
     <div className="app-shell">
-      <Header title={t('knownWords')} backTo="/" />
+      <Header title={t('knownWords')} backTo={vocabularyDashboardPath(vocabularyId)} />
       <main className="page page-full">
         <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: 12 }}>
           {t('knownWordsHint')}
