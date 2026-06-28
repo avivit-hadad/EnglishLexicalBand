@@ -139,7 +139,7 @@
   "sessionWordsBreakdownUnavailable": "פירוט מילים לא נשמר לתרגולים ישנים",
   "practiceAllSessionWords": "תרגל את כל מילות התרגול",
   "matchDragTitle": "התאמת מילים",
-  "matchDragHint": "גרור/י כל מילה באנגלית לתרגום העברי שלה. בטלפון: לחץ/י על אנגלית, ואז על עברית.",
+  "matchDragHint": "בחר/י מילה באנגלית ואז לחץ/י על הפירוש שלה בעברית.",
   "matchDragProgress": "{{done}} / {{total}} הותאמו",
   "matchDragComplete": "הכל הותאם!",
   "skipMatching": "דלג/י — הצג תוצאות",
